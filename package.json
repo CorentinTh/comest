@@ -2,18 +2,37 @@
   "name": "comest",
   "version": "0.0.0",
   "description": "Simple command tester",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "rollup -c",
+    "prepare": "npm run build"
   },
+  "files": [
+    "/dist/"
+  ],
+  "author": "Corentin Thomasset <corentin.thomasset74+npm@gmail.com> (https://github.com/CorentinTh)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/CorentinTh/comest.git"
   },
-  "author": "",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/CorentinTh/comest/issues"
   },
-  "homepage": "https://github.com/CorentinTh/comest#readme"
+  "homepage": "https://github.com/CorentinTh/comest#readme",
+  "devDependencies": {
+    "@types/node": "^14.0.13",
+    "rollup": "^2.15.0",
+    "rollup-plugin-terser": "^6.1.0",
+    "rollup-plugin-typescript2": "^0.27.1",
+    "typescript": "^3.9.5"
+  },
+  "dependencies": {
+    "colors": "^1.4.0",
+    "glob": "^7.1.6",
+    "js-yaml": "^3.14.0",
+    "string-argv": "^0.3.1",
+    "tmp": "^0.2.1"
+  }
 }
