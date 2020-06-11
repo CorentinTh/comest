@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Simple command tester",
   "main": "dist/index.js",
+  "bin": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "rollup -c",
