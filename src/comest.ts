@@ -92,7 +92,7 @@ const generateCommand = (config): string => {
             if (asset.type === 'file') {
                 return (asset as AssetFile).file.name
             } else if (asset.type === 'string') {
-                return asset.content
+                return `"${asset.content}"`
             }
         } else {
             throw `Cannot find asset "${name}" from "${config.command}". Currently available assets are: ${config.assets.map(asset => `"${asset.name}"`).join(', ')}`
@@ -103,12 +103,13 @@ const generateCommand = (config): string => {
 }
 
 const executeCommand = (command: string) => {
-    let args = parseArgsStringToArgv(command);
-    let cmd = args.shift();
+    // let args = parseArgsStringToArgv(command);
+    // let cmd = args.shift();
 
-    return spawnSync(cmd, args, {
+    return spawnSync(command, {
         cwd: process.cwd(),
-        encoding: 'utf-8'
+        encoding: 'utf-8',
+        shell: true
     })
 }
 
@@ -175,7 +176,6 @@ const comest = (dir: string) => {
             const command = generateCommand(config);
             const commandResult = executeCommand(command);
             const result = verifyExpectation(commandResult, config.expect);
-
             removeAssets(config.assets);
 
             return {
