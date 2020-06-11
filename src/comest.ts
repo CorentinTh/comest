@@ -4,7 +4,6 @@ import {glob} from 'glob'
 import {readFileSync, writeFileSync} from 'fs'
 import {safeLoad} from 'js-yaml'
 import tmp from 'tmp'
-import {parseArgsStringToArgv} from "string-argv";
 import 'colors'
 
 interface Asset {
@@ -47,6 +46,10 @@ let validateConfig = (config) => {
         && config.command !== undefined
         && config.name !== undefined;
 
+    if (!config.assets) {
+        config.assets = [];
+    }
+
     if (!isValid) {
         throw `Config not valid: skipping the test suite: \n${JSON.stringify(config, null, 2)}`
     }
@@ -84,7 +87,7 @@ const removeAssets = (assets) => {
     })
 }
 
-const generateCommand = (config): string => {
+const generateCommand = (config: Config<Asset>): string => {
     return config.command.replace(/\{(.*?)\}/g, (initial, name) => {
         const asset: Asset = config.assets.find(asset => asset.name === name);
 
@@ -95,7 +98,7 @@ const generateCommand = (config): string => {
                 return `"${asset.content}"`
             }
         } else {
-            throw `Cannot find asset "${name}" from "${config.command}". Currently available assets are: ${config.assets.map(asset => `"${asset.name}"`).join(', ')}`
+            throw `Cannot find asset "${name}" from "${config.command}" in file ${config.path.replace(process.cwd(), '')}`
         }
 
         return initial
@@ -103,9 +106,6 @@ const generateCommand = (config): string => {
 }
 
 const executeCommand = (command: string) => {
-    // let args = parseArgsStringToArgv(command);
-    // let cmd = args.shift();
-
     return spawnSync(command, {
         cwd: process.cwd(),
         encoding: 'utf-8',
@@ -115,7 +115,11 @@ const executeCommand = (command: string) => {
 
 const verifyExpectation = (result, expectations): SuiteResult[] => {
     return Object.entries(expectations).map(([key, value]) => {
-        const input = result[key]
+        let input = result[key]
+
+        if (typeof input === 'string') {
+            input = input.trim();
+        }
 
         return {
             type: key,
@@ -133,10 +137,10 @@ function formatResults(results: { result: SuiteResult[]; path: string; name: str
             let result = `Test suite: "${value.name}"`.bold + ` (file : ${value.path.replace(process.cwd(), '')})` + `\n\n`;
 
             result += value.result.map(suiteResult => {
-                if(suiteResult.pass){
+                if (suiteResult.pass) {
                     return `✓ ${suiteResult.type}: OK`.green
                 } else {
-                    return `✗ ${suiteResult.type}: FAILED`.red +`\n\nExpected:\n"${suiteResult.expected}"\n\nReceived:\n"${suiteResult.received}"\n`
+                    return `✗ ${suiteResult.type}: FAILED`.red + `\n\nExpected:\n"${suiteResult.expected}"\n\nReceived:\n"${suiteResult.received}"\n`
                 }
             }).join('\n')
 
@@ -149,13 +153,12 @@ function formatResults(results: { result: SuiteResult[]; path: string; name: str
     const counter = `${passingTests}/${suitesCount}`;
 
     const global = splitter +
-        `Tests results: ${passingTests === suitesCount ? counter.green : counter.red} assertions passing`.bold +
+        `Tests results: ${passingTests === suitesCount ? counter.green : counter.red} assertions passing in ${results.length} files.`.bold +
         '\n\n' +
         results.map(v => {
-            const count = v.result.length
-            const passing = v.result.reduce((a, v) => (a += v.pass ? 1 : 0), 0);
+            const pass = v.result.every((v) => v.pass);
 
-            return `Suite: '${v.name}' ${passing === count ? counter.green : counter.red}`
+            return ((pass ? '✓'.green : '✗'.red) + ` Suite: '${v.name}'`)
         }).join('\n') +
         splitter
 
@@ -170,25 +173,31 @@ function formatResults(results: { result: SuiteResult[]; path: string; name: str
 
 const comest = (dir: string) => {
 
-    const result = getFilesContent(dir)
-        .map((config) => {
-            config.assets = createAssets(config.assets)
-            const command = generateCommand(config);
-            const commandResult = executeCommand(command);
-            const result = verifyExpectation(commandResult, config.expect);
-            removeAssets(config.assets);
+    try {
+        const result = getFilesContent(dir)
+            .map((config) => {
+                config.assets = createAssets(config.assets)
+                const command = generateCommand(config);
+                const commandResult = executeCommand(command);
+                const result = verifyExpectation(commandResult, config.expect);
+                removeAssets(config.assets);
 
-            return {
-                path: config.path,
-                name: config.name,
-                result
-            };
-        })
+                return {
+                    path: config.path,
+                    name: config.name,
+                    result
+                };
+            })
 
-    const {output, suitesCount, passingTests} = formatResults(result)
-    console.log(output)
+        const {output, suitesCount, passingTests} = formatResults(result)
+        console.log(output)
 
-    process.exit(suitesCount === passingTests ? 0 : 1);
+        process.exit(suitesCount === passingTests ? 0 : 1);
+    } catch (e) {
+        console.log('An error occured while parsing the test files.\n\n' + e.toString().red);
+        process.exit(1);
+    }
+
 }
 
 export {comest};
