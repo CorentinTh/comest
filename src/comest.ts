@@ -51,6 +51,7 @@ interface ConfigSteps {
 type Config = ConfigSimple | ConfigSteps;
 
 interface SuiteResult {
+    command: string,
     type: string,
     pass: boolean,
     expected: string | number,
@@ -145,23 +146,27 @@ const verifyExpectation = (result, expectations): SuiteResult[] => {
             type: key,
             pass: input === value,
             expected: value,
-            received: input
+            received: input ?? ''
         } as SuiteResult
     }) : [];
 }
 
-function formatResults(results: { result: SuiteResult[]; path: string; name: string }[]) {
+function formatResults(results: { result: { result: SuiteResult[]; command: string }[]; path: string; name: string }[]) {
     const splitter = `\n${'-'.repeat(10)}\n`;
     const suites = results
         .map(value => {
             let result = `Test suite: "${value.name}"`.bold + ` (file : ${value.path.replace(process.cwd(), '')})` + `\n\n`;
 
-            result += value.result.map(suiteResult => {
-                if (suiteResult.pass) {
-                    return `✓ ${suiteResult.type}: OK`.green
-                } else {
-                    return `✗ ${suiteResult.type}: FAILED`.red + `\n\nExpected:\n"${suiteResult.expected}"\n\nReceived:\n"${suiteResult.received}"\n`
-                }
+            result += value.result.map(suiteInfo => {
+                return '-> ' + suiteInfo.command + (suiteInfo.result.length > 0 ? '\n' : '') + suiteInfo.result.map(results => {
+                    if (results.pass) {
+                        return `✓ ${results.type}: OK`.green
+                    } else {
+                        return `✗ ${results.type}: FAILED`.red + `\n\nExpected:\n"${results.expected}"\n\nReceived:\n"${results.received}"\n`
+                    }
+                }).join('\n') + '\n';
+
+
             }).join('\n')
 
             return result;
@@ -169,14 +174,14 @@ function formatResults(results: { result: SuiteResult[]; path: string; name: str
         .join(splitter)
 
     const suitesCount = results.reduce((a, v) => (a += v.result.length), 0)
-    const passingTests = results.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.pass ? 1 : 0), 0)), 0)
+    const passingTests = results.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.pass ? 1 : 0), 0)), 0)), 0);
     const counter = `${passingTests}/${suitesCount}`;
 
     const global = splitter +
         `Tests results: ${passingTests === suitesCount ? counter.green : counter.red} assertions passing in ${results.length} files.`.bold +
         '\n\n' +
         results.map(v => {
-            const pass = v.result.every((v) => v.pass);
+            const pass = v.result.every((v) => v.result.every(v => v.pass));
 
             return ((pass ? '✓'.green : '✗'.red) + ` Suite: '${v.name}'`)
         }).join('\n') +
@@ -200,13 +205,17 @@ const comest = (dir: string) => {
 
                 const suiteResult = config.steps.map(step => {
 
-                    const commands = generateCommand(step.command, config.assets, config.path.replace(process.cwd(), ''));
-                    const commandResult = executeCommand(commands);
+                    const command = generateCommand(step.command, config.assets, config.path.replace(process.cwd(), ''));
+                    const commandResult = executeCommand(command);
                     const result = verifyExpectation(commandResult, step.expect);
 
                     console.log(result);
-                    return result;
-                }).reduce((a,v) => [...a, ...v], [])
+                    return {
+                        result,
+                        command: step.command
+                    };
+                })
+
                 console.log(suiteResult);
                 removeAssets(config.assets);
                 return {
