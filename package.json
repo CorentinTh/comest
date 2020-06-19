@@ -1,6 +1,6 @@
 {
   "name": "comest",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Simple command tester",
   "main": "dist/index.js",
   "bin": "dist/index.js",
