@@ -94,9 +94,8 @@ const createAssets = (assets) => {
             const extension = /(?:\.([^.]+))?$/.exec(asset.name)[1];
             const postfix = extension ? '.' + extension : ''
 
-            const file = tmp.fileSync({postfix});
+            const file = tmp.fileSync({postfix, mode:0o755, discardDescriptor: true });
             writeFileSync(file.name, asset.content ?? '');
-            chmodSync(file.name, '755');
             asset.file = file;
         }
 
@@ -177,7 +176,7 @@ function formatResults(results: { result: { result: SuiteResult[]; command: stri
         })
         .join(splitter)
 
-    const suitesCount = results.reduce((a, v) => (a += v.result.length), 0)
+    const suitesCount = results.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.result.length), 0)), 0)
     const passingTests = results.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.pass ? 1 : 0), 0)), 0)), 0);
     const counter = `${passingTests}/${suitesCount}`;
 
