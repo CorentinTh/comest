@@ -1,7 +1,7 @@
 import {spawnSync} from 'child_process'
 import {join} from 'path'
 import {glob} from 'glob'
-import {readFileSync, writeFileSync} from 'fs'
+import {chmodSync, readFileSync, writeFileSync} from 'fs'
 import {safeLoad} from 'js-yaml'
 import tmp from 'tmp'
 import 'colors'
@@ -91,10 +91,12 @@ const getConfigs = (baseDir: string): ConfigSteps[] => {
 const createAssets = (assets) => {
     return assets.map(asset => {
         if (asset.type === 'file') {
-            const extension = '.' + /(?:\.([^.]+))?$/.exec(asset.name)[1] ?? '';
+            const extension = /(?:\.([^.]+))?$/.exec(asset.name)[1];
+            const postfix = extension ? '.' + extension : ''
 
-            const file = tmp.fileSync({postfix: extension})
+            const file = tmp.fileSync({postfix});
             writeFileSync(file.name, asset.content ?? '');
+            chmodSync(file.name, '755');
             asset.file = file;
         }
 
