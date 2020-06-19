@@ -22,17 +22,33 @@ interface AssetFile {
     }
 }
 
-interface Config<T extends Asset> {
+interface ConfigSimple {
     name: string,
     path: string,
     command: string,
-    assets: T[],
+    assets: Asset[],
     expect: {
         stdout?: string,
         stderr?: string,
         status?: number
     }
 }
+
+interface ConfigSteps {
+    name: string,
+    path: string,
+    assets: Asset[],
+    steps: {
+        command: string,
+        expect: {
+            stdout?: string,
+            stderr?: string,
+            status?: number
+        }
+    }[]
+}
+
+type Config = ConfigSimple | ConfigSteps;
 
 interface SuiteResult {
     type: string,
@@ -41,37 +57,41 @@ interface SuiteResult {
     received: string | number
 }
 
-let validateConfig = (config) => {
-    const isValid = config
-        && config.command !== undefined
-        && config.name !== undefined;
+let normalizeConfig = (config: Config): ConfigSteps => {
+    if (config && config.name !== undefined) {
+        if (!("steps" in config)) {
+            (config as unknown as ConfigSteps).steps = [{
+                command: config.command,
+                expect: config.expect,
+            }];
+        }
 
-    if (!config.assets) {
-        config.assets = [];
-    }
+        if (!config.assets) {
+            config.assets = [];
+        }
 
-    if (!isValid) {
+        return (config as unknown as ConfigSteps);
+    } else {
         throw `Config not valid: skipping the test suite: \n${JSON.stringify(config, null, 2)}`
     }
 
-    return isValid ? config : undefined;
 };
 
-const getFilesContent = (baseDir: string): Config<Asset>[] => {
+const getConfigs = (baseDir: string): ConfigSteps[] => {
     const path = join(baseDir, 'test', '**/*.test.y?(a)ml')
     return glob
         .sync(path)
         .map(path => ({path, content: readFileSync(path, 'utf-8')}))
         .filter(c => c.content && c.content !== '')
         .map(({path, content}) => ({...safeLoad(content), path}))
-        .map(validateConfig);
+        .map(normalizeConfig);
 }
 
 const createAssets = (assets) => {
     return assets.map(asset => {
         if (asset.type === 'file') {
             const file = tmp.fileSync()
-            writeFileSync(file.name, asset.content);
+            writeFileSync(file.name, asset.content ?? '');
             asset.file = file;
         }
 
@@ -87,9 +107,9 @@ const removeAssets = (assets) => {
     })
 }
 
-const generateCommand = (config: Config<Asset>): string => {
-    return config.command.replace(/\{(.*?)\}/g, (initial, name) => {
-        const asset: Asset = config.assets.find(asset => asset.name === name);
+const generateCommand = (command: string, assets: Asset[], name: string): string => {
+    return command.replace(/\{(.*?)\}/g, (initial, name) => {
+        const asset: Asset = assets.find(asset => asset.name === name);
 
         if (asset) {
             if (asset.type === 'file') {
@@ -98,7 +118,7 @@ const generateCommand = (config: Config<Asset>): string => {
                 return `"${asset.content}"`
             }
         } else {
-            throw `Cannot find asset "${name}" from "${config.command}" in file ${config.path.replace(process.cwd(), '')}`
+            throw `Cannot find asset "${name}" from "${command}" in file ${name}`
         }
 
         return initial
@@ -114,7 +134,7 @@ const executeCommand = (command: string) => {
 }
 
 const verifyExpectation = (result, expectations): SuiteResult[] => {
-    return Object.entries(expectations).map(([key, value]) => {
+    return expectations ? Object.entries(expectations).map(([key, value]) => {
         let input = result[key]
 
         if (typeof input === 'string') {
@@ -127,7 +147,7 @@ const verifyExpectation = (result, expectations): SuiteResult[] => {
             expected: value,
             received: input
         } as SuiteResult
-    })
+    }) : [];
 }
 
 function formatResults(results: { result: SuiteResult[]; path: string; name: string }[]) {
@@ -174,18 +194,25 @@ function formatResults(results: { result: SuiteResult[]; path: string; name: str
 const comest = (dir: string) => {
 
     try {
-        const result = getFilesContent(dir)
+        const result = getConfigs(dir)
             .map((config) => {
                 config.assets = createAssets(config.assets)
-                const command = generateCommand(config);
-                const commandResult = executeCommand(command);
-                const result = verifyExpectation(commandResult, config.expect);
-                removeAssets(config.assets);
 
+                const suiteResult = config.steps.map(step => {
+
+                    const commands = generateCommand(step.command, config.assets, config.path.replace(process.cwd(), ''));
+                    const commandResult = executeCommand(commands);
+                    const result = verifyExpectation(commandResult, step.expect);
+
+                    console.log(result);
+                    return result;
+                }).reduce((a,v) => [...a, ...v], [])
+                console.log(suiteResult);
+                removeAssets(config.assets);
                 return {
                     path: config.path,
                     name: config.name,
-                    result
+                    result: suiteResult
                 };
             })
 
@@ -194,6 +221,7 @@ const comest = (dir: string) => {
 
         process.exit(suitesCount === passingTests ? 0 : 1);
     } catch (e) {
+        console.log(e);
         console.log('An error occured while parsing the test files.\n\n' + e.toString().red);
         process.exit(1);
     }

@@ -83,3 +83,23 @@ expect:
           return 56;
       }
 ```
+
+### Multi steps
+
+```yaml
+name: Steps demo
+assets:
+  - type: file
+    name: file1
+steps:
+  - command: echo "foo" > {file1}
+    expect:
+      status: 0
+  - command: echo "bar" >> {file1}
+  - command: cat {file1}
+    expect:
+      status: 0
+      stdout: |-
+        foo
+        bar
+```
