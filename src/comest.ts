@@ -91,7 +91,9 @@ const getConfigs = (baseDir: string): ConfigSteps[] => {
 const createAssets = (assets) => {
     return assets.map(asset => {
         if (asset.type === 'file') {
-            const file = tmp.fileSync()
+            const extension = '.' + /(?:\.([^.]+))?$/.exec(asset.name)[1] ?? '';
+
+            const file = tmp.fileSync({postfix: extension})
             writeFileSync(file.name, asset.content ?? '');
             asset.file = file;
         }
@@ -209,14 +211,12 @@ const comest = (dir: string) => {
                     const commandResult = executeCommand(command);
                     const result = verifyExpectation(commandResult, step.expect);
 
-                    console.log(result);
                     return {
                         result,
                         command: step.command
                     };
                 })
 
-                console.log(suiteResult);
                 removeAssets(config.assets);
                 return {
                     path: config.path,
