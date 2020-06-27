@@ -94,7 +94,7 @@ const createAssets = (assets) => {
             const extension = /(?:\.([^.]+))?$/.exec(asset.name)[1];
             const postfix = extension ? '.' + extension : ''
 
-            const file = tmp.fileSync({postfix, mode:0o755, discardDescriptor: true });
+            const file = tmp.fileSync({postfix, mode: 0o755, discardDescriptor: true});
             writeFileSync(file.name, asset.content ?? '');
             asset.file = file;
         }
@@ -158,6 +158,10 @@ function formatResults(results: { result: { result: SuiteResult[]; command: stri
     const splitter = `\n${'-'.repeat(10)}\n`;
     const suites = results
         .map(value => {
+            if(value.result.every(v => v.result.every(v => v.pass))){
+                return '';
+            }
+
             let result = `Test suite: "${value.name}"`.bold + ` (file : ${value.path.replace(process.cwd(), '')})` + `\n\n`;
 
             result += value.result.map(suiteInfo => {
@@ -172,23 +176,24 @@ function formatResults(results: { result: { result: SuiteResult[]; command: stri
 
             }).join('\n')
 
-            return result;
-        })
-        .join(splitter)
+            return result + '\n';
+        }).join('')
 
     const suitesCount = results.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.result.length), 0)), 0)
     const passingTests = results.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.result.reduce((a, v) => (a += v.pass ? 1 : 0), 0)), 0)), 0);
     const counter = `${passingTests}/${suitesCount}`;
 
+    const info = `Tests results: ${passingTests === suitesCount ? counter.green : counter.red} assertions passing in ${results.length} files.`.bold;
     const global = splitter +
-        `Tests results: ${passingTests === suitesCount ? counter.green : counter.red} assertions passing in ${results.length} files.`.bold +
+        info +
         '\n\n' +
         results.map(v => {
             const pass = v.result.every((v) => v.result.every(v => v.pass));
 
             return ((pass ? '✓'.green : '✗'.red) + ` Suite: '${v.name}'`)
         }).join('\n') +
-        splitter
+        splitter + '\n' +
+        info;
 
 
     return {
